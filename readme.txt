@@ -62,7 +62,7 @@ In these cases the tname is listed as (MISSING).
 =========================================================================
 Technical notes regarding all apps:
 
-Code is html with javascript/jquery/css.  I avoided the other suggested
+Code is html with javascript/jquery/d3/css.  I avoided the other suggested
 libraries (underscore et al) since I was getting back on my feet
 with javascript already and wanted to make sure I understood what
 I was doing.  It seemed for purposes of these apps that javascript
