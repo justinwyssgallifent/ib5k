@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<!--Get the relevant supporting stuff-->
+
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>
+<script src="http://d3js.org/d3.v3.min.js"></script>
+
+
+<style type="text/css">
+table.apple {
+    background-color:#005555;
+    box-shadow: 2px 2px 2px #999; 
+    border: 1px solid black;
+    color: white;
+}
+td.menu{    
+    vertical-align: top;
+    white-space: nowrap;
+}
+td.caption {
+    border-bottom:1px solid black;
+    font-size:200%;
+}
+td.outline {
+    border:1px solid black;
+    width: 99%;
+}
+td.buttonholder {
+    padding-top:5px;
+    padding-bottom:5px;
+}
+td.item {
+    border-bottom:1px solid black;
+    padding-top:10px;
+    padding-bottom:10px;
+}
+td#bubbletitle {
+    font-size:200%;
+    text-align:center;
+    color: white;
+    font-family: sans-serif;
+    text-shadow:
+      -1px -1px 0 #000,  
+       1px -1px 0 #000,
+      -1px 1px 0 #000,
+       1px 1px 0 #000;    
+}
+button.create {
+    background-color:#888888;
+    border-radius:10px;
+    border:2px solid black;
+    width:150px;
+    height:25px;
+    color:#ffffff;
+}
+button.roundish {
+    background-color:#888888;
+    border-radius:10px;
+    border:2px solid black;
+    width:150px;
+    height:25px;
+    color:#ffffff;
+}
+.node circle {
+    fill: #555555;
+    stroke: #dd0000;
+    stroke-width: 3px;	
+}
+.labeltext { 
+    font: 12px sans-serif; 
+    fill: white;
+}
+.link {
+    fill: none;
+    stroke: #222222;
+    stroke-width: 2px;
+}
+
+</style>
+
+<!--Now the actual javascript-->
+
+<script>
+
+$(document).ready(function(){
+
+var mydata_uw;
+var mydata_ut;
+var mysince;
+var myuntil;
+var mylimit;
+
+function prettyplot(treeData) {
+
+    var width = 800;
+    var height = 600;
+
+    var radius = Math.min(width, height) / 2;
+    var color = d3.scale.category20c();
+
+    var svg = d3.select("#svgVisualize").append("svg")
+        .attr("width", width)
+        .attr("height", height)
+        .append("g")
+        .attr("transform", "translate("+0.5*width+","+ 0.5*height+")");
+
+    var partition = d3.layout.partition()
+        .sort(null)
+        .size([2 * Math.PI, radius * radius])
+        .value(function(d) { return 1; });
+
+    var arc = d3.svg.arc()
+        .startAngle(function(d) { return d.x; })
+        .endAngle(function(d) { return d.x + d.dx; })
+        .innerRadius(function(d) { return 0.8*Math.sqrt(d.y); })
+        .outerRadius(function(d) { return 0.8*Math.sqrt(d.y + d.dy); });
+
+    root = treeData[0];
+
+    var path = svg.datum(root).selectAll("path")
+        .data(partition.nodes)
+        .enter()
+        .append("g");
+
+    path.append("path")
+        .attr("display", function(d) { return d.depth ? null : "none"; }) // hide inner ring
+        .attr("d", arc)
+        .style("stroke", "#555555")
+        .style("fill", function(d) { return color((d.children ? d : d.parent).name); })
+        .style("fill-rule", "evenodd");
+
+    // Some functions for the text.
+    
+    function getAngle(d) {
+        var thetaDeg = (180 / Math.PI * (arc.startAngle()(d) + arc.endAngle()(d)) / 2 - 90);
+        return (thetaDeg > 90) ? thetaDeg - 180 : thetaDeg;
+    }
+    function getAlignment(d) {
+        var thetaDeg = (180 / Math.PI * (arc.startAngle()(d) + arc.endAngle()(d)) / 2 - 90);
+        if (d.depth == 2) {
+            return (thetaDeg > 90) ? "end" : "start";
+        } else {
+            return (thetaDeg > 90) ? "start" : "end";
+        }
+    }
+    function getdx(d) {
+        var thetaDeg = (180 / Math.PI * (arc.startAngle()(d) + arc.endAngle()(d)) / 2 - 90);
+        if (d.depth == 2) {
+            return (thetaDeg > 90) ? "7" : "-7";
+        } else {
+            return (thetaDeg > 90) ? "-17" : "17";
+        }
+
+    }
+    function getText(d) {
+        var dummy = d.name;
+        if (dummy.length > 17) {dummy = dummy.substring(0,16)+"...";}
+        return d.depth == 0 ? "":dummy;
+    }
+    path.append("text")
+        .classed('label', true)
+        .attr("class","labeltext")
+        .attr("x", function(d) { return d.x })
+        .attr("text-anchor", function(d) {return getAlignment(d);})
+	.attr("transform", function(d) {return "translate("+arc.centroid(d)+")"+"rotate("+getAngle(d)+")";})
+	.attr("dx", function(d) {return getdx(d);})
+	.attr("dy", ".35em") 
+	.text(function(d){return getText(d);})
+        .attr("pointer-events","none");
+
+
+
+}
+
+// If we reset the defaults.
+
+$("#reset").click(function(){
+    $(document.activeElement).blur()
+    $('#since').val('05-01-2015');
+    $('#until').val('05-15-2015');
+    $('#limit').val('1000');
+    $('#radioprimaryuname').prop("checked", true)
+});
+
+// If we click to plot.
+
+$(".create").click(function(event){
+    $(document.activeElement).blur()
+
+    // Pull from the text fields.
+
+    var since_orig = $('#since').val();
+    var until_orig = $('#until').val();
+    var since = Date.parse(since_orig)/1000;
+    var until = Date.parse(until_orig)/1000;
+    var limit = $('#limit').val();
+
+    // Check that we have meaningful numbers.
+
+    var valid = 1;
+    if ((isNaN(limit)) || (limit < 0)) {valid = 0;}
+    if (isNaN(since)) {valid = 0;}
+    if (isNaN(until)) {valid = 0;}
+    if (until < since) {valid = 0;}
+
+    // If not, alert and get out.
+
+    if (valid == 0) {
+        alert('Bad Parameters!');
+        return;
+    }
+
+    // Check if the parameters have changed so that we need
+    // to reload the data.  
+
+    var reload = 0;
+    if ((mysince != since)||(myuntil != until)||(mylimit != limit)) {
+        reload = 1;
+        mysince = since;
+        myuntil = until; 
+        mylimit = limit;
+    }
+
+    // If not then plot and get out.
+
+    if (reload == 0) {
+        var pairing = $('input[name=pairing]:checked').val();
+        if ((pairing == 'ut')||(pairing == 'tu')) {
+            sortAndPlot(mydata_ut);
+        } else {
+            sortAndPlot(mydata_uw);
+        }
+        return;
+    }
+
+    // We're only here if we need to reload the data and plot.
+    // Create the request.
+
+    document.getElementById('bubblesubtitle').innerHTML = "Loading Data...";
+    var add = "http://instrument.ib5k.com/api/v1/source/543e90c8e4b0b91d5a6b99f9/entities?";
+    add = add + "callback=?";
+    add = add + "since="+since;
+    add = add + "&until="+until;
+    add = add + "&limit="+limit;
+    add = add + "&skip=0&apikey=55513244e4b0c005610465f3";
+
+    $.getJSON(add, function(data) {
+
+        // We have data in data, a json array.
+        // If the array is empty then we have no data.
+
+        if (data.length == 0) {
+	    alert('No Data Available!');
+            return;
+        }
+
+        var data_original = data;
+
+        // Create two sets of data.
+        // Throw out all data for which there's no wconfig.
+        // We'll do this with a rebuild.
+
+        newData = [];
+        for (i = 0; i < data_original.length; i++) {
+            if ("wconfig" in data_original[i].metrics) {
+                newData.push(data_original[i]);
+            }
+        }
+        mydata_uw = newData;
+
+        // Throw out all data for which there's no tload.
+        // We'll do this with a rebuild.
+
+        newData = [];
+        for (i = 0; i < data_original.length; i++) {
+            if ("tload" in data_original[i].metrics) {
+                if (!("tname" in data_original[i].metrics)) {
+                    data_original[i].metrics['tname'] = '(MISSING)';
+                }
+                newData.push(data_original[i]);
+            }
+        }
+        mydata_ut = newData;
+        var pairing = $('input[name=pairing]:checked').val();
+        if ((pairing == 'ut')||(pairing == 'tu')) {
+            sortAndPlot(mydata_ut);
+        } else {
+            sortAndPlot(mydata_uw);
+        }
+    })
+    .error(function() { alert("error"); });
+});
+
+function sortAndPlot(data) {
+
+    // How much data, total?
+ 
+    var numData = data.length;
+
+    // Get the primary and secondary.
+
+    var pairing = $('input[name=pairing]:checked').val();
+    var primary;
+    var secondary;
+    if (pairing == 'uw') {
+         primary = 'uname';secondary = 'wtype';
+    } else if (pairing == 'wu') {
+         primary = 'wtype';secondary = 'uname';
+    } else if (pairing == 'ut') {
+         primary = 'uname';secondary = 'tname';
+    } else {
+         primary = 'tname';secondary = 'uname';
+    }
+
+    // We need to put the data into a tree.  
+    // First we'll do this more intuitively.
+    // We only want entries with wconfig set.
+    // Create a hash with one entry per user, key=uname
+    // each entry is also a hash.
+
+    var children = new Object();
+    $.each(data,function(index,value) {
+        var localprimary = value.metrics[primary];
+        // If this primary doesn't exist, create an entry.
+        if (!(localprimary in children)) {
+            children[localprimary] = {
+                "name":localprimary,
+                "parent":primary,
+                "children":[],
+                "value":0
+            }
+        }
+        children[localprimary]["value"]++;
+
+        // Then check the secondary.
+
+        var localsecondary = value.metrics[secondary];
+
+        // This needs to appear as a key in an entry of "children".
+
+        for (var i=0;i<children[localprimary]["children"].length;i++) {
+            if (children[localprimary]["children"][i]["name"] == localsecondary) {break;}
+        }
+
+        // If we never found it, add an entry to the children array.
+
+        if (i == children[localprimary]["children"].length) {
+            children[localprimary]["children"].push({
+                "name":localsecondary,
+                "parent":localprimary,
+                "value":0
+            })
+        }
+
+        // Increase the value.
+
+        children[localprimary]["children"][i]["value"]++;
+    });
+
+    // Convert this to an array.
+
+    var childrenarray = [];
+    Object.keys(children).forEach(function (key) {
+        childrenarray.push(children[key]);
+    });
+
+    // Finalize and plot.
+
+    var finalData = [{"name":primary,"parent":"null","children":childrenarray,"value":numData}]
+
+    $("#svgVisualize").empty();
+    document.getElementById('bubbletitle').innerHTML = primary+"-"+secondary;
+    document.getElementById('bubblesubtitle').innerHTML = data.length+" Data Points Used";
+    prettyplot(finalData);
+}
+
+});
+</script>
+</head>
+<body>
+
+<!--Some fields to enter data, with defaults.-->
+
+<table class="apple" width=900 height=600>
+<tr>
+  <td class="menu">
+    <table>
+      <tr><td class="item">
+        Start Date
+        <br><input type="text" id="since" value="05-01-2015">
+        <br>End Date
+        <br><input type="text" id="until" value="05-15-2015">
+        <br>Max Grab
+        <br><input type="text" id="limit" value="1000">
+      </td></tr>
+      <tr><td class="item">
+        Primary-Secondary
+        <br><input type="radio" name="pairing" id="radioprimaryuw" value="uw" checked>
+            <label for="radioprimaryuw">uname-wtype</label>
+        <br><input type="radio" name="pairing" id="radioprimarywu" value="wu">
+            <label for="radioprimarywu">wtype-uname</label>
+        <br><input type="radio" name="pairing" id="radioprimaryut" value="ut">
+            <label for="radioprimaryut">uname-tname</label>
+        <br><input type="radio" name="pairing" id="radioprimarytu" value="tu">
+            <label for="radioprimarytu">tname-uname</label>
+      </tr></td>
+      <tr><td class=item>
+        <button id="reset" class="roundish">Reset Defaults</button>
+        <br><br><button class="create" id="bubble">Create Donut</button>
+      </tr></td>
+    </table>
+  </td>
+  <td class="outline">
+    <table>
+       <tr><td width=100% id="bubbletitle">&nbsp;</td></tr>
+       <tr><td><svg id="svgVisualize" width=800 height=600></svg></td></tr>
+       <tr><td width=100% id="bubblesubtitle">&nbsp;</td></tr>
+    </table>
+  </td>
+</tr>
+</table>
+
+
+
+
+
+</body>
+</html>

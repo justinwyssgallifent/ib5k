@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<!--Get the relevant supporting stuff-->
+
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>
+<script src="http://d3js.org/d3.v3.min.js"></script>
+
+
+<style type="text/css">
+table.apple {
+    background-color:#8348a3;
+    box-shadow: 2px 2px 2px #999; 
+    border: 1px solid black;
+    color: white;
+}
+td.menu{    
+    vertical-align: top;
+    white-space: nowrap;
+}
+td.item {
+    border-bottom:1px solid black;
+    padding-top:10px;
+    padding-bottom:10px;
+}
+td.caption {
+    border-bottom:1px solid black;
+    font-size:200%;
+}
+td.outline {
+    border:1px solid black;
+    width: 99%;
+}
+td.buttonholder {
+    padding-top:5px;
+    padding-bottom:5px;
+}
+td#bubbletitle {
+    font-size:200%;
+    text-align:center;
+    color: white;
+    font-family: sans-serif;
+    text-shadow:
+      -1px -1px 0 #000,  
+       1px -1px 0 #000,
+      -1px 1px 0 #000,
+       1px 1px 0 #000;    
+}
+button.create {
+    background-color:#888888;
+    border-radius:10px;
+    border:2px solid black;
+    width:150px;
+    height:25px;
+    color:#ffffff;
+}
+button.roundish {
+    background-color:#888888;
+    border-radius:10px;
+    border:2px solid black;
+    width:150px;
+    height:25px;
+    color:#ffffff;
+}
+.node {
+    fill: #ffffff;
+    stroke: #dddddd;
+    stroke-width: 2px;
+}
+.node {
+  pointer-events: none;
+  font: sans-serif;
+  font-size: 50%;
+}
+.link {
+    stroke: #777;
+    stroke-width: 2px;
+}
+.outlinetext {
+    fill: white;
+    font-size: 100%;
+    font-family: sans-serif;
+    text-shadow:
+      -1px -1px 0 #000,  
+       1px -1px 0 #000,
+      -1px 1px 0 #000,
+       1px 1px 0 #000;
+}
+</style>
+
+<!--Now the actual javascript-->
+
+<script>
+
+$(document).ready(function(){
+
+var mydata;
+var mysince;
+var myuntil;
+var mylimit;
+
+function prettyplot(dataparam) {
+
+    var fill = d3.scale.category10();
+    nodes = dataparam;
+
+    var force = d3.layout.force()
+        .nodes(nodes)
+        .charge(-400)
+        .size([800, 600])
+        .on("tick", tick)
+        .start();
+
+    var svg = d3.select("#svgVisualize");
+
+    var node = svg.selectAll(".node")
+        .data(nodes)
+        .enter()
+        .append("g");
+
+    var c = node.append("circle")
+        .attr("class", "node")
+        .attr("cx", function(d) { return d.x; })
+        .attr("cy", function(d) { return d.y; })
+        .attr("r", function(d) { return d.r;})
+        .style("fill", function(d, i) { return fill(i & 3); })
+        .style("stroke", function(d, i) { return d3.rgb(fill(i & 3)).darker(2); });
+
+    var l = node.append("text")
+        .attr("dx", function(d) {return d.textx;})
+        .attr("dy", function(d) {return d.texty;})
+        .attr("text-anchor", "middle")
+        .attr("class","outlinetext")
+        .text(function(d) { return d.name; })
+        .call(force.drag);
+
+    function tick(e) {
+        c.attr("cx", function(d) { return d.x; })
+         .attr("cy", function(d) { return d.y; });
+        l.attr("dx", function(d) { return (d.x-250)*1.3+250; })
+         .attr("dy", function(d) { return (d.y-250)*1.3+250; });
+
+    }
+
+}
+
+// If we reset the defaults.
+
+$("#reset").click(function(){
+    $(document.activeElement).blur()
+    $('#since').val('05-01-2015');
+    $('#until').val('05-15-2015');
+    $('#limit').val('1000');
+    $('#radiouname').prop("checked", true)
+});
+
+// If we click to plot.
+$(".create").click(function(event){
+
+    $(document.activeElement).blur()
+
+    // Pull from the text fields.
+
+    var since_orig = $('#since').val();
+    var until_orig = $('#until').val();
+    var since = Date.parse(since_orig)/1000;
+    var until = Date.parse(until_orig)/1000;
+    var limit = $('#limit').val();
+
+    // Check that we have meaningful numbers.
+
+    var valid = 1;
+    if ((isNaN(limit)) || (limit < 0)) {valid = 0;}
+    if (isNaN(since)) {valid = 0;}
+    if (isNaN(until)) {valid = 0;}
+    if (until < since) {valid = 0;}
+
+    // If not, alert and get out.
+
+    if (valid == 0) {
+        alert('Bad Data!');
+        return;
+    }
+
+    // Check if the parameters have changed so that we need
+    // to reload the data.  
+
+    var reload = 0;
+    if ((mysince != since)||(myuntil != until)||(mylimit != limit)) {
+        reload = 1;
+        mysince = since;
+        myuntil = until; 
+        mylimit = limit;
+    }
+
+    // If not then plot and get out.
+
+    if (reload == 0) {
+        sortAndPlot(mydata);
+        return;
+    }
+
+    // We're only here if we need to reload the data and plot.
+    // Create the request.
+
+    document.getElementById('bubblesubtitle').innerHTML = "Loading Data...";
+    var add = "http://instrument.ib5k.com/api/v1/source/543e90c8e4b0b91d5a6b99f9/entities?";
+    add = add + "callback=?";
+    add = add + "since="+since;
+    add = add + "&until="+until;
+    add = add + "&limit="+limit;
+    add = add + "&skip=0&apikey=55513244e4b0c005610465f3";
+
+    $.getJSON(add, function(data) {
+
+        // We have data in data, a json array.
+        // If the array is empty then we have no data.
+
+        mydata = data;
+        if (data.length == 0) {
+	    alert('No Data Available!');
+            return;
+        }
+        sortAndPlot(data);
+    })
+    .error(function() { alert("error"); });
+});
+
+function sortAndPlot(data) {
+
+    // How much data, total?
+
+    var numData = data.length;
+
+    // Sum the data.  Basically we build an object which
+    // contains a key for each category and the value is the
+    // total number of times that category appears.
+
+    var category = $('input[name=grouping]:checked').val();
+    var fullData = new Object();
+    $.each(data,function(index,value) {
+        var cat = value.metrics[category];
+        if (!(cat in fullData)) {fullData[cat] = 0;}
+        fullData[cat]++;
+    })
+
+    // Color array to pull from
+
+    var colorarray = d3.scale.category20();
+
+    // How many objects did we get?
+
+    var howMany = Object.keys(fullData).length;
+    var niceData = [];
+    var radius = 600;
+    var textradius = 650;
+    var i = 0;
+    Object.keys(fullData).forEach(function (key) {
+        var radit = 0.9*fullData[key]/numData+0.1;
+        var radians = 2*Math.PI*i/howMany;
+        niceData.push({x:250+radius*Math.cos(radians),
+                       y:250+radius*Math.sin(radians),
+                       r:0.5*2*120*Math.PI/howMany*radit,
+                       name:key+' '+Math.floor(10000*fullData[key]/numData)/100+"%",
+                       color:colorarray(i),
+                       textx:250+textradius*Math.cos(radians),
+                       texty:250+textradius*Math.sin(radians)
+        });
+        i++;
+    });
+    $("#svgVisualize").empty();
+    document.getElementById('bubbletitle').innerHTML = "Usage per "+category;
+    document.getElementById('bubblesubtitle').innerHTML = data.length+" Data Points Used";
+    prettyplot(niceData);
+}
+
+});
+</script>
+</head>
+<body>
+
+<!--Some fields to enter data, with defaults.-->
+
+<table class="apple" width=900 height=600>
+<tr>
+  <td class="menu">
+    <table>
+      <tr><td class="item">
+        Start Date
+        <br><input type="text" id="since" value="05-01-2015">
+        <br>End Date
+        <br><input type="text" id="until" value="05-15-2015">
+        <br>Max Grab
+        <br><input type="text" id="limit" value="1000">
+      </td></tr>
+      <tr><td class="item">
+        Categories
+        <br><input type="radio" name="grouping" id="radiouname" value="uname" checked>
+            <label for="radiouname">uname</label>
+        <br><input type="radio" name="grouping" id="radioenv" value="env">
+            <label for="radioenv">env</label>
+      </tr></td>
+      <tr><td class=item>
+        <button id="reset" class="roundish">Reset Defaults</button>
+        <br><br><button class="create" id="bubble">Create Bubbles</button>
+      </tr></td>
+    </table>
+  </td>
+  <td class="outline">
+    <table>
+       <tr><td width=100% id="bubbletitle">&nbsp;</td></tr>
+       <tr><td><svg id="svgVisualize" width=800 height=600></svg></td></tr>
+       <tr><td width=100% id="bubblesubtitle">&nbsp;</td></tr>
+    </table>
+  </td>
+</tr>
+</table>
+
+
+</body>
+</html>
