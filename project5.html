@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<!--Get the relevant supporting stuff-->
+
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>
+<script src="http://d3js.org/d3.v3.min.js"></script>
+
+
+<style type="text/css">
+table.apple {
+    background-color:#dde0dd;
+    box-shadow: 2px 2px 2px #999; 
+    border: 1px solid black;
+    color: black;
+}
+td.menu{    
+    vertical-align: top;
+    white-space: nowrap;
+}
+td.caption {
+    border-bottom:1px solid black;
+    font-size:200%;
+}
+td.outline {
+    border:1px solid black;
+    width: 99%;
+}
+td.buttonholder {
+    padding-top:5px;
+    padding-bottom:5px;
+}
+td.item {
+    border-bottom:1px solid black;
+    padding-top:10px;
+    padding-bottom:10px;
+}
+td#bubbletitle {
+    font-size:200%;
+    text-align:center;
+    color: white;
+    font-family: Monaco;
+    text-shadow:
+      -1px -1px 0 #000,  
+       1px -1px 0 #000,
+      -1px 1px 0 #000,
+       1px 1px 0 #000;    
+}
+button.create {
+    background-color:#888888;
+    border-radius:10px;
+    border:2px solid black;
+    width:150px;
+    height:25px;
+    color:#ffffff;
+}
+button.roundish {
+    background-color:#888888;
+    border-radius:10px;
+    border:2px solid black;
+    width:150px;
+    height:25px;
+    color:#ffffff;
+}
+.node circle {
+    fill: #555555;
+    stroke: #dd0000;
+    stroke-width: 3px;	
+}
+.labeltext { 
+    font: 12px Monaco;
+    fill: black;
+}
+.titletext { 
+    font: 16px Monaco; 
+    fill: black;
+}
+.link {
+    fill: none;
+    stroke: #222222;
+    stroke-width: 2px;
+}
+
+</style>
+
+<!--Now the actual javascript-->
+
+<script>
+
+$(document).ready(function(){
+
+// Load the data.
+// We attempt 10000 entries from the last 3600 seconds (one hour).  
+// We don't ever seem to get that many, which is good, because the
+// goal is to get the entirety of a time interval.
+// Ideally we'd have some way of guaranteeing that the API returns
+// such a construction but this is okay for testing.
+
+var mydata;
+var myuntil = Math.floor(Date.now() / 1000);
+var mysince = myuntil - 3600;
+var mylimit = 1000;
+
+loadData(mysince,myuntil,mylimit);
+
+function loadData (since,until,limit) {
+
+    document.getElementById('bubblesubtitle').innerHTML = "Loading Data...";
+    var add = "http://instrument.ib5k.com/api/v1/source/543e90c8e4b0b91d5a6b99f9/entities?";
+    add = add + "callback=?";
+    add = add + "since="+since;
+    add = add + "&until="+until;
+    add = add + "&limit="+limit;
+    add = add + "&skip=0&apikey=55513244e4b0c005610465f3";
+
+    $.getJSON(add, function(data) {
+        document.getElementById('bubblesubtitle').innerHTML = "";
+        // We have data in data, a json array.
+        // If the array is empty then we have no data.
+
+        if (data.length == 0) {
+	    alert('No Data Available!');
+            return;
+        }
+        mydata = data;
+        var type = $('input[name=type]:checked').val();
+        sortAndPlot(mydata,type);
+    })
+    .error(function() { alert("error"); });
+}
+
+function heatChart(probs,dids,title) {
+    $("#svgVisualize").empty();
+//    console.table(probs);
+    var width = 800;
+    var height = 600;
+    var cols = 10;
+    var rows = dids.length;
+    var col_width = Math.floor(800/20);
+    var row_height = Math.floor(col_width/2);
+
+    var width_offset = 0;
+    var height_offset = 40;
+
+    var color = d3.scale.pow().exponent(0.8)
+        .domain([0, 1])
+        .range(["#FFF0F0","#8b0000"]);
+    
+    var color_chart = d3.select("#svgVisualize")
+        .append("svg")
+        .attr("class", "chart")
+        .attr("width", width)
+        .attr("height", height)
+
+    var heat = color_chart.selectAll("rect")
+        .data(probs)
+        .enter()
+        .append("rect")
+        .attr("x", function(d) { return width_offset+250+col_width*d.minute;})
+        .attr("y", function(d) { return height_offset+row_height+row_height*d.row;})
+        .attr("width", col_width)
+        .attr("height", row_height)
+        .attr("fill", function(d) {return color(0);});
+//        .attr("fill", function(d) {return color(d.prob);});
+
+    heat.transition().
+        duration(function(d) { return 100*d.minute;})
+//        duration(function(d) { return 500*10*(1-d.prob);})
+        .style("fill", function(d) { return color(d.prob); });
+
+    color_chart.selectAll("didlabel")
+        .data(dids)
+        .enter()
+        .append("text")
+        .attr("class","labeltext")
+        .text(function(d) { return d; })
+        .style("text-anchor", "end")
+        .attr("x",width_offset+250+0.9*col_width)
+        .attr("y", function(d,i) {return height_offset+row_height+row_height*(i+1)-5;});
+
+    color_chart.append("text")
+        .attr("class","labeltext")
+        .style("text-anchor","end")
+        .text("Dashboard ID")
+        .attr("x",width_offset+250+0.9*col_width)
+        .attr("y",height_offset+row_height-5);
+        
+    color_chart.selectAll("minlabel")
+        .data([1,2,3,4,5,6,7,8,9,10])
+        .enter()
+        .append("text")
+        .attr("class","labeltext")
+        .text(function(d,i) {return i+1;})
+        .attr("x",function(d,i) {return width_offset+250+1.4*col_width+i*col_width;})
+        .attr("y",height_offset+2*row_height+row_height*rows);
+
+    color_chart.append("text")
+        .attr("class","labeltext")
+        .style("text-anchor","start")
+        .text("Time")
+        .attr("x",width_offset+250+col_width+col_width*cols)
+        .attr("y",height_offset+2*row_height+row_height*rows);
+
+    color_chart.append("text")
+        .attr("class","titletext")
+        .style("text-anchor","middle")
+        .text("Probability of at least one "+title+" event within the next t minutes.")
+        .attr("x",width/2)
+        .attr("y",height_offset-20);
+
+    var legend_x = 0.4*width-5*col_width;
+
+    var legend = color_chart.selectAll("legrect")
+        .data([0,1,2,3,4,5,6,7,8,9])
+        .enter()
+        .append("rect")
+        .attr("x", function(d,i) { return width_offset+legend_x+i*col_width;})
+        .attr("y", height_offset+rows*row_height+3*row_height)
+        .attr("width", col_width)
+        .attr("height", row_height)
+        .attr("fill", function(d,i) {return color(i/10);});
+        
+    color_chart.selectAll("leglabel")
+        .data([0,1,2,3,4,5,6,7,8,9,10])
+        .enter()
+        .append("text")
+        .style("text-anchor","start")
+        .attr("class","labeltext")
+        .text(function(d,i) {return i<10 ? i/10 : "Probability Legend";})
+        .attr("x",function(d,i) {return width_offset+legend_x+i*col_width+0.5*col_width;})
+        .attr("y",height_offset+rows*row_height+4.7*row_height);
+
+}
+
+// If we click to plot.
+
+//$(".create").click(function(event){
+$(".radioforecast").click(function(event){
+    $(document.activeElement).blur()
+    var type = $('input[name=type]:checked').val();
+    sortAndPlot(mydata,type);
+});
+
+function sortAndPlot(data,type) {
+
+    // How much data, total?
+ 
+    var numData = mydata.length;
+
+    // Construct an object didobject:
+    // key = did
+    // value = object {date1:total1,date2:total2,...}
+
+    var newdata = mydata;
+    var didobject = new Object();
+    for (var event in newdata) {
+        if (newdata[event].metrics[type] == 1) {
+            var did = newdata[event].metrics.did;
+            var date = Math.floor(newdata[event].date/60);
+            if (!(did in didobject)) {didobject[did] = new Object();}
+            if (!(date in didobject[did])) {didobject[did][date] = 0;}
+            didobject[did][date]++;
+        }
+    }
+
+    // Construct object mu:
+    // key = did
+    // value = mu (average for the day)
+
+    var sum = new Object();
+    var mu = new Object();
+    for (var did in didobject) {
+        sum[did] = 0;
+        for (var date in didobject[did]) {
+            sum[did] += didobject[did][date];
+        }
+        mu[did] = sum[did]/60;   
+    }
+
+    // Construct array probs:
+    // [object,object,...] with each object:
+    // {"did":did,"minute":x,"row":row,"prob":prob}
+    // Each entry in the array gives a did and a probability of
+    // getting at least one event in the next x minutes.
+    // The row is just a value for printing.
+    // We also construct an array of did in the same order as the rows above.
+
+    var probs = [];
+    var dids = []
+    var j = 0;
+    for (var did in didobject) {
+        for (var i=1;i<11;i++) {
+            dids[j] = did;
+            var p = new Object();
+            p.did = did;
+            p.minute = i;
+            p.row = j;
+            p.prob = atleastone(mu[did],i);
+            probs.push(p);
+        }
+        j++;
+    }
+
+    heatChart(probs,dids,type);
+
+
+//    for (var did in didobject) {
+//        console.log(did);
+//        console.log(mu[did]);
+//        console.log(atleastone(mu[did],5));    
+//    }
+
+
+}
+
+// What's the probability of getting at least one event in the next m minutes inclusive?
+function atleastone(mu,m) {
+    // Let n be the probability of getting exactly none in a given minute.
+    var n = poisson(mu,0);
+    // Then ...
+    return 1-Math.pow(n,m);
+}
+
+function poisson(mu,x) {
+    return Math.exp(-1*mu)*Math.pow(mu,x)/factorial(x);
+}
+function factorial(n) {
+    return n==0 ? 1 : n*factorial(n-1);
+}
+
+});
+</script>
+</head>
+<body>
+
+<!--Some fields to enter data, with defaults.-->
+
+<table class="apple" width=900 height=600>
+<tr>
+  <td class="menu">
+    <table>
+      <tr><td class="item">
+        Forecast Choice
+        <br><input type="radio" name="type" class="radioforecast" id="rftload" value="tload" checked>
+            <label for="rftload">tload</label>
+        <br><input type="radio" name="type" class="radioforecast" id="rfwconfig" value="wconfig">
+            <label for="rfwconfig">wconfig</label>
+      </td></tr>
+    </table>
+  </td>
+  <td class="outline">
+    <table>
+       <tr><td width=100% id="bubbletitle">&nbsp;</td></tr>
+       <tr><td><svg id="svgVisualize" width=800 height=600></svg></td></tr>
+       <tr><td width=100% id="bubblesubtitle">&nbsp;</td></tr>
+    </table>
+  </td>
+</tr>
+</table>
+
+
+
+
+
+</body>
+</html>

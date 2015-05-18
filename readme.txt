@@ -60,6 +60,20 @@ with a tload should contain a tname this is not quite true.
 There are a small number of tload events with no tname.  
 In these cases the tname is listed as (MISSING).
 =========================================================================
+project5.html
+
+This app pulls data from the last hour.  It looks at the
+number of tload (or wconfig, user can choose) events per minute 
+for each dashboard id and constructs a Poisson distribution in 
+order to forecast the probability that at least one new event 
+will register with the next 1,...,9,10 minutes.  This probability 
+is displayed on a per-did basis in a heat map with a legend.
+
+Note: Writing this app made me question the API.  I made some
+requests which resulted in data with "date" entries outside
+the range requested.  This app does not worry about that, it
+simply goes with what it gets.
+=========================================================================
 Technical notes regarding all apps:
 
 Code is html with javascript/jquery/d3/css.  I avoided the other suggested
