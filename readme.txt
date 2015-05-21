@@ -74,6 +74,17 @@ requests which resulted in data with "date" entries outside
 the range requested.  This app does not worry about that, it
 simply goes with what it gets.
 =========================================================================
+project6.html
+
+This app displays the daily data either for tload or wconfig for
+any chosen DID.  Once the data is loaded the user can choose
+from amongst the DID and the chart smoothly transitions.
+
+The chart used is an infinity chart which is a way of representing
+the 24-hour clock in a figure-8, with the daylight hours on top
+and the nighttime hours below.  Currently the day is based around
+UTC.
+=========================================================================
 Technical notes regarding all apps:
 
 Code is html with javascript/jquery/d3/css.  I avoided the other suggested

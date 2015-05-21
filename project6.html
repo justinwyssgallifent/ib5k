@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<!--Get the relevant supporting stuff-->
+
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>
+<script src="http://d3js.org/d3.v3.min.js"></script>
+
+
+<style type="text/css">
+table.apple {
+    background-color:#778899;
+    box-shadow: 2px 2px 2px #999; 
+    border: 1px solid black;
+    color: white;
+}
+td.menu{    
+    vertical-align: top;
+    white-space: nowrap;
+}
+td.caption {
+    border-bottom:1px solid black;
+    font-size:200%;
+}
+td.outline {
+    border:1px solid black;
+    width: 99%;
+}
+td.buttonholder {
+    padding-top:5px;
+    padding-bottom:5px;
+}
+td.item {
+    border-bottom:1px solid black;
+    padding-top:10px;
+    padding-bottom:10px;
+    font-family: Monaco;
+}
+td#bubbletitle {
+    font-size:200%;
+    text-align:center;
+    color: white;
+    font-family: sans-serif;
+    text-shadow:
+      -1px -1px 0 #000,  
+       1px -1px 0 #000,
+      -1px 1px 0 #000,
+       1px 1px 0 #000;    
+}
+button.create {
+    background-color:#888888;
+    border-radius:10px;
+    border:2px solid black;
+    width:150px;
+    height:25px;
+    color:#ffffff;
+}
+button.roundish {
+    background-color:#888888;
+    border-radius:10px;
+    border:2px solid black;
+    width:150px;
+    height:25px;
+    color:#ffffff;
+}
+.node circle {
+    fill: #555555;
+    stroke: #dd0000;
+    stroke-width: 3px;	
+}
+.labeltext { 
+    font: 18px Monaco; 
+    fill: white;
+}
+.link {
+    fill: none;
+    stroke: #222222;
+    stroke-width: 2px;
+}
+.clickabletext {
+    font: 12px Monaco;
+    stroke: white;
+}
+.clickabletextmouseover {
+    font: 13px Monaco;
+    stroke: white;
+}
+.didlabletext {
+    font: 12px Monaco;
+    stroke: white;
+    text-decoration: underline;
+}
+
+
+
+</style>
+
+<!--Now the actual javascript-->
+
+<script>
+
+$(document).ready(function(){
+
+var mydata;
+var mydidlist;
+
+var daydiv = 192;
+
+// First we load the data.  This also does a display of data
+// with the first did selected as default.
+
+loadAndDisplay();
+
+
+function loadAndDisplay() {
+
+    // Pull from the text fields.
+
+    var since_orig = $('#since').val();
+    var until_orig = $('#until').val();
+    var since = Date.parse(since_orig)/1000;
+    var until = Date.parse(until_orig)/1000;
+    var limit = $('#limit').val();
+
+    // Check that we have meaningful numbers.
+
+    var valid = 1;
+    if ((isNaN(limit)) || (limit < 0)) {valid = 0;}
+    if (isNaN(since)) {valid = 0;}
+    if (isNaN(until)) {valid = 0;}
+    if (until < since) {valid = 0;}
+
+    // If not, alert and get out.
+
+    if (valid == 0) {
+        alert('Bad Parameters!');
+        return;
+    }
+
+    document.getElementById('bubblesubtitle').innerHTML = "Loading...";
+    var add = "http://instrument.ib5k.com/api/v1/source/543e90c8e4b0b91d5a6b99f9/entities?";
+    add = add + "callback=?";
+    add = add + "since="+since;
+    add = add + "&until="+until;
+    add = add + "&limit="+limit;
+    add = add + "&skip=0&apikey=55513244e4b0c005610465f3";
+
+    $.getJSON(add, function(data) {
+
+        document.getElementById('bubblesubtitle').innerHTML = "";
+
+        // We have data in data, a json array.
+        // If the array is empty then we have no data.
+
+        if (data.length == 0) {
+	    alert('No Data Available!');
+            return;
+        }
+
+        // The time is divided by 3600 and floored, 
+        // converting it to hours, and then it
+        // is taken mod 24, the number of hours
+        // in a day, which turns it into a value
+        // telling which hour of the day it
+        // occured.
+
+        // We construct the following structure:
+        // [{"did1":total1,"did2":total2,...},   <- 0th hour
+        //  {"did1":total1,"did2":total2,...},   <- 1st hour
+        //  ...
+        // This contains, for each hour 0...23, the total 
+        // under each did.
+        // We also create a list of did too.
+
+        var type = $('input[name=type]:checked').val();
+        mydata = []
+        mydidlist = []
+        mymax = 0;
+        for (i = 0; i < daydiv ; i++) {
+            mydata[i] = {};
+        }
+        for (i = 0; i < data.length; i++) {
+            if (type in data[i].metrics) {
+                var min = Math.floor(data[i].date/(86400/daydiv)) % daydiv;
+                var did = data[i].metrics.did;
+                if (!(did in mydata[min])) {mydata[min][did] = 0;}
+                mydata[min][did]++;
+                if ($.inArray(did, mydidlist) == -1) {mydidlist.push(did);}
+            }
+        }
+
+        // We pass this to our infinity plot:
+
+        infinityPlot(mydidlist,mydata,type);
+
+    })
+    .error(function() { alert("error"); });
+
+}
+
+
+function infinityPlot(didlist,data,type) {
+
+    $("#svgVisualize").empty();
+
+    //console.log(didlist);
+    //console.log(data);
+
+    var width = 800;
+    var height = 600;
+    var infcx = 0.4*width;
+    var infcy = 0.52*height;
+    var temp = didlist[didlist.length-1];
+     
+    var max = 0; 
+    for (var i=0;i < data.length;i++) {
+        for (var did in data[i]) {
+            if (data[i][did] > max) {max = data[i][did];}
+        }    
+    }
+
+    var radius = Math.min(width, height) / 2;
+    var color = d3.scale.category20c();
+
+    var infinity = d3.select("#svgVisualize")
+        .append("svg")
+        .attr("width", width)
+        .attr("height", height);
+
+    // Clock related functions.
+
+    function infx(i) {return 0.28*width*Math.cos(i)/(1+Math.sin(i)*Math.sin(i));}
+    function infy(i) {return 0.6*height*Math.sin(i)*Math.cos(i)/(1+Math.sin(i)*Math.sin(i));}
+    function infxoffset(i,r) {
+        var xx = (3*Math.sin(i)*Math.sin(i)-1)/((Math.sin(i)*Math.sin(i)+1)*(Math.sin(i)*Math.sin(i)+1))
+        var yy = Math.sin(i)*(Math.sin(i)*Math.sin(i)-3)/((Math.sin(i)*Math.sin(i)+1)*(Math.sin(i)*Math.sin(i)+1))
+        var ret = r*xx/Math.sqrt(xx*xx+yy*yy);
+        return ret;
+    }
+    function infyoffset(i,r) {
+        var xx = (3*Math.sin(i)*Math.sin(i)-1)/((Math.sin(i)*Math.sin(i)+1)*(Math.sin(i)*Math.sin(i)+1))
+        var yy = Math.sin(i)*(Math.sin(i)*Math.sin(i)-3)/((Math.sin(i)*Math.sin(i)+1)*(Math.sin(i)*Math.sin(i)+1))
+        var ret = r*yy/Math.sqrt(xx*xx+yy*yy);
+        return ret;
+    }
+    function polygon(i,r) {
+        var start = i/daydiv*2*Math.PI; 
+        var end = (i+1)/daydiv*2*Math.PI;
+        var y1 = infcy+infx(start)+infxoffset(start,r);
+        var x1 = infcx+infy(start)+infyoffset(start,r);
+        var y2 = infcy+infx(start)-infxoffset(start,r);
+        var x2 = infcx+infy(start)-infyoffset(start,r);
+        var y3 = infcy+infx(end)-infxoffset(end,r);
+        var x3 = infcx+infy(end)-infyoffset(end,r);
+        var y4 = infcy+infx(end)+infxoffset(end,r);
+        var x4 = infcx+infy(end)+infyoffset(end,r);
+        var str = x1+","+y1+","+x2+","+y2+","+x3+","+y3+","+x4+","+y4;
+        return str;
+    }
+    function mycolor(d) {
+        return (temp in d) ? color(d[temp]) : "#d3d3d3";
+    }
+    var color = d3.scale.linear()
+        .domain([-10, max])
+        .range(["#d3d3d3","#ff0000"]);
+
+    // Set up the clock.
+
+    var clock = infinity.selectAll("times")
+        .data(data)
+        .enter()
+        .append("polygon")
+        .style("stroke","#eeeeee")
+        .style("fill","#d3d3d3")
+        .style("opacity","0.8")
+        .attr("points",function(d,i) {return polygon(i,30);})
+
+    // Do the initial transition of the clock.
+
+    clock.transition()
+        .duration(1000)
+        .style("stroke","#eeeeee")
+        .style("fill",function(d) {return mycolor(d);})
+
+    // Set up the buttons, one for each did.        
+
+    var oldi = didlist.length-1;
+    var buttons = d3.select("#svgVisualize")
+        .selectAll("mybuttons")
+        .data(didlist)
+        .enter()
+        .append("text")
+        .attr("class","clickabletext")
+        .attr("x",function(d,i) {
+            if (i==didlist.length-1) {
+                oldnode = d3.select(this);return width-40;
+            } else {
+                return width-10;
+            }
+        })
+        .attr("y",function (d,i) {return 0.5*height+10*didlist.length-20*i;})
+        .style("text-anchor","end")
+        .text(function(d) {return d;})
+        .on("mouseover",function (d) {
+            $('html,body').css('cursor','pointer');
+            d3.select(this).transition().duration(100).attr("class","clickabletextmouseover");
+       })
+       .on("mouseout",function (d) {
+            $('html,body').css('cursor','auto');
+            d3.select(this).transition().duration(100).attr("class","clickabletext");
+       })
+       .on("click", function (d,i) {
+            if (i != oldi) {
+                oldi = i;
+                d3.select(this).transition().duration(500).attr("x",width-40);
+                if (oldnode != undefined) {oldnode.transition().duration(500).attr("x",width-10);}
+                oldnode = d3.select(this);
+                temp = d;
+                clock.transition()
+                    .duration(1000)
+                    .style("stroke","#eeeeee")
+                    .style("fill",function(d) {return mycolor(d);})
+            }
+        })
+    d3.select("#svgVisualize")
+        .append("text")
+        .style("text-anchor","end")
+        .attr("class","didlabletext")
+        .attr("x",width-10)
+        .attr("y",0.5*height+10*didlist.length-20*didlist.length)
+        .text("DID Options")
+
+    d3.select("#svgVisualize")
+        .append("text")
+        .style("text-anchor","middle")
+        .attr("class","labeltext")
+        .attr("x",infcx)
+        .attr("y",infcy-0.45*height)
+        .text("12:00")
+    d3.select("#svgVisualize")
+        .append("text")
+        .style("text-anchor","middle")
+        .attr("class","labeltext")
+        .attr("x",infcx)
+        .attr("y",infcy+0.47*height)
+        .text("00:00")
+    d3.select("#svgVisualize")
+        .append("text")
+        .style("text-anchor","middle")
+        .attr("class","labeltext")
+        .attr("x",infcx+0.25*width)
+        .attr("y",infcy+0.25*height)
+        .text("03:00")
+    d3.select("#svgVisualize")
+        .append("text")
+        .style("text-anchor","middle")
+        .attr("class","labeltext")
+        .attr("x",infcx-0.25*width)
+        .attr("y",infcy+0.25*height)
+        .text("21:00")
+    d3.select("#svgVisualize")
+        .append("text")
+        .style("text-anchor","middle")
+        .attr("class","labeltext")
+        .attr("x",infcx-0.25*width)
+        .attr("y",infcy-0.25*height)
+        .text("09:00")
+    d3.select("#svgVisualize")
+        .append("text")
+        .style("text-anchor","middle")
+        .attr("class","labeltext")
+        .attr("x",infcx+0.25*width)
+        .attr("y",infcy-0.25*height)
+        .text("15:00")
+
+    d3.select("#svgVisualize")
+        .append("text")
+        .style("text-anchor","middle")
+        .attr("class","labeltext")
+        .attr("x",infcx)
+        .attr("y",20)
+        .text("Data Over 24 UTC Hours: "+type)
+
+}
+
+// If we reset the defaults.
+
+$("#reset").click(function(){
+    $(document.activeElement).blur();
+    $('#since').val('05-01-2015');
+    $('#until').val('05-15-2015');
+    $('#limit').val('1000');
+    $('#radiotload').prop("checked", true);
+});
+$("#loaddata").click(function(){
+    $(document.activeElement).blur();
+    loadAndDisplay();
+});
+
+
+});
+</script>
+</head>
+<body>
+
+<!--Some fields to enter data, with defaults.-->
+
+<table class="apple" width=900 height=600>
+<tr>
+  <td class="menu">
+    <table>
+      <tr><td class="item">
+        Start Date
+        <br><input type="text" id="since" value="05-01-2015">
+        <br>End Date
+        <br><input type="text" id="until" value="05-15-2015">
+        <br>Max Grab
+        <br><input type="text" id="limit" value="1000">
+      </td></tr>
+      <tr><td class="item">
+        Category
+        <br><input type="radio" name="type" id="radiotload" value="tload" checked>
+            <label for="radiotload">tload</label>
+        <br><input type="radio" name="type" id="radiowconfig" value="wconfig">
+            <label for="radiowconfig">wconfig</label>
+      </td></tr>
+      <tr><td class=item>
+        <button id="reset" class="roundish">Reset Defaults</button>
+        <br><br><button class="create" id="loaddata">Load Data</button>
+      </td></tr>
+        <tr><td width=100% id="bubblesubtitle">&nbsp;</td></tr>
+    </table>
+  </td>
+  <td class="outline">
+    <table>
+       <tr><td width=100% id="bubbletitle">&nbsp;</td></tr>
+       <tr><td><svg id="svgVisualize" width=800 height=600></svg></td></tr>
+    </table>
+  </td>
+</tr>
+</table>
+
+
+
+
+
+</body>
+</html>
